@@ -1,1 +1,2 @@
-# siege-store-admin-ver
+the project name is siege/حصار a online store/website where you can buy and rent medieval  weapon armor siege machine from all around the world arab,viking,eurpe,  half way through  i split the store into a admin/owner version and public version the admin version can add edit Delete  merchandise and the public version you have $1000 and only can buy/rent there is a search bar and a tag system and while you search for something it shows stuff while you type the project is working fine the only problem i run into is i cant get a server up and running i can make a local server but not a server you can access it wherever  you are 
+work in Arabic in the future i will make a languages option if i continue to work on it
