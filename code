@@ -1,0 +1,218 @@
+import tkinter as tk
+from tkinter import filedialog, messagebox
+from PIL import Image, ImageTk
+import json, os
+
+ITEMS_FILE = "items.json"
+
+# Load items safely
+try:
+    with open(ITEMS_FILE, encoding="utf-8") as f:
+        items = json.load(f)
+except:
+    items = {}
+
+def save_items():
+    with open(ITEMS_FILE, "w", encoding="utf-8") as f:
+        json.dump(items, f, ensure_ascii=False, indent=2)
+
+app = tk.Tk()
+app.title("Siege Store Admin")
+app.geometry("600x850")
+app.configure(bg="#1a1a1a")
+
+tk.Label(app, text="Admin Panel", fg="#f4c542", bg="#1a1a1a", font=("Arial", 18)).pack(pady=10)
+
+search_var = tk.StringVar()
+search_entry = tk.Entry(app, textvariable=search_var, width=30)
+search_entry.pack(pady=5)
+search_entry.insert(0, "Search items...")
+
+def clear_search(event):
+    if search_entry.get() == "Search items...":
+        search_entry.delete(0, tk.END)
+
+def restore_search(event):
+    if search_entry.get() == "":
+        search_entry.insert(0, "Search items...")
+
+search_entry.bind("<FocusIn>", clear_search)
+search_entry.bind("<FocusOut>", restore_search)
+
+selected_item = tk.StringVar(app)
+selected_item.set(next(iter(items), ""))
+
+item_menu = tk.OptionMenu(app, selected_item, *items.keys())
+item_menu.config(bg="#444", fg="white", width=20)
+item_menu.pack(pady=10)
+
+image_label = tk.Label(app, bg="#1a1a1a")
+image_label.pack(pady=10)
+
+desc_label = tk.Label(app, text="", wraplength=500, fg="white", bg="#1a1a1a", font=("Arial", 12))
+desc_label.pack(pady=5)
+
+def update_display(*_):
+    item = selected_item.get()
+    if item in items:
+        data = items[item]
+        desc = data.get("desc", "")
+        cat = data.get("category", "")
+        tags = ", ".join(data.get("tags", []))
+        desc_label.config(text=f"{desc}\nCategory: {cat}\nTags: {tags}")
+        try:
+            img = Image.open(data["image"]).resize((150, 150))
+            photo = ImageTk.PhotoImage(img)
+            image_label.config(image=photo, text="")
+            image_label.image = photo
+        except:
+            image_label.config(image='', text="Image not found", fg="white")
+    else:
+        desc_label.config(text="")
+        image_label.config(image='')
+
+def refresh_dropdown(filtered=None):
+    item_menu["menu"].delete(0, "end")
+    keys = filtered if filtered else items.keys()
+    for name in keys:
+        item_menu["menu"].add_command(label=name, command=tk._setit(selected_item, name))
+    if keys:
+        selected_item.set(next(iter(keys)))
+    else:
+        selected_item.set("")
+
+def search_items(*_):
+    query = search_var.get().strip().lower()
+    if query == "" or query == "search items...":
+        refresh_dropdown()
+        return
+    filtered = []
+    for name, data in items.items():
+        if query in name.lower() or query in data.get("desc", "").lower() or any(query in tag.lower() for tag in data.get("tags", [])):
+            filtered.append(name)
+    refresh_dropdown(filtered)
+
+def add_item():
+    form = tk.Toplevel(app)
+    form.title("Add Item")
+    form.geometry("400x500")
+    form.configure(bg="#1a1a1a")
+
+    def field(label):
+        tk.Label(form, text=label, fg="white", bg="#1a1a1a").pack()
+        entry = tk.Entry(form, width=30)
+        entry.pack()
+        return entry
+
+    name_entry = field("Item Name:")
+    desc_entry = field("Description:")
+    buy_entry = field("Buy Price:")
+    rent_entry = field("Rent Price:")
+    cat_entry = field("Category:")
+    tag_entry = field("Tags (comma-separated):")
+    img_path = tk.StringVar()
+    tk.Entry(form, textvariable=img_path, width=30).pack()
+
+    def browse_image():
+        img_path.set(filedialog.askopenfilename(filetypes=[("Image Files", "*.png *.jpg *.jpeg")]))
+
+    tk.Button(form, text="Browse", command=browse_image, bg="#444", fg="white").pack()
+
+    def submit():
+        name = name_entry.get()
+        desc = desc_entry.get()
+        try:
+            buy = int(buy_entry.get())
+            rent = int(rent_entry.get())
+        except:
+            messagebox.showerror("Error", "Prices must be numbers")
+            return
+        img = img_path.get()
+        cat = cat_entry.get()
+        tags = [t.strip() for t in tag_entry.get().split(",") if t.strip()]
+        if not name or not img:
+            messagebox.showerror("Error", "Name and image required")
+            return
+        items[name] = {"desc": desc, "buy": buy, "rent": rent, "image": img, "category": cat, "tags": tags}
+        save_items()
+        refresh_dropdown()
+        selected_item.set(name)
+        update_display()
+        form.destroy()
+
+    tk.Button(form, text="Add Item", command=submit, bg="#00aa00", fg="white").pack(pady=10)
+
+def edit_item():
+    item = selected_item.get()
+    if item not in items: return
+    data = items[item]
+    form = tk.Toplevel(app)
+    form.title("Edit Item")
+    form.geometry("400x500")
+    form.configure(bg="#1a1a1a")
+
+    def field(label, value):
+        tk.Label(form, text=label, fg="white", bg="#1a1a1a").pack()
+        entry = tk.Entry(form, width=30)
+        entry.insert(0, value)
+        entry.pack()
+        return entry
+
+    name_entry = field("Item Name:", item)
+    desc_entry = field("Description:", data["desc"])
+    buy_entry = field("Buy Price:", str(data["buy"]))
+    rent_entry = field("Rent Price:", str(data["rent"]))
+    cat_entry = field("Category:", data.get("category", ""))
+    tag_entry = field("Tags (comma-separated):", ", ".join(data.get("tags", [])))
+    img_path = tk.StringVar(value=data["image"])
+    tk.Entry(form, textvariable=img_path, width=30).pack()
+
+    def browse_image():
+        img_path.set(filedialog.askopenfilename(filetypes=[("Image Files", "*.png *.jpg *.jpeg")]))
+
+    tk.Button(form, text="Browse", command=browse_image, bg="#444", fg="white").pack()
+
+    def submit():
+        new_name = name_entry.get()
+        desc = desc_entry.get()
+        try:
+            buy = int(buy_entry.get())
+            rent = int(rent_entry.get())
+        except:
+            messagebox.showerror("Error", "Prices must be numbers")
+            return
+        img = img_path.get()
+        cat = cat_entry.get()
+        tags = [t.strip() for t in tag_entry.get().split(",") if t.strip()]
+        if not new_name or not img:
+            messagebox.showerror("Error", "Name and image required")
+            return
+        del items[item]
+        items[new_name] = {"desc": desc, "buy": buy, "rent": rent, "image": img, "category": cat, "tags": tags}
+        save_items()
+        refresh_dropdown()
+        selected_item.set(new_name)
+        update_display()
+        form.destroy()
+
+    tk.Button(form, text="Save Changes", command=submit, bg="#00aa00", fg="white").pack(pady=10)
+
+def delete_item():
+    item = selected_item.get()
+    if item in items and messagebox.askyesno("Delete", f"Delete '{item}'?"):
+        del items[item]
+        save_items()
+        refresh_dropdown()
+        selected_item.set("")
+        update_display()
+
+tk.Button(app, text="Add Item", command=add_item, bg="#0055aa", fg="white", width=15).pack(pady=10)
+tk.Button(app, text="Edit Item", command=edit_item, bg="#888800", fg="white", width=15).pack(pady=5)
+tk.Button(app, text="Delete Item", command=delete_item, bg="#aa0000", fg="white", width=15).pack(pady=5)
+
+selected_item.trace_add("write", update_display)
+search_var.trace_add("write", search_items)
+refresh_dropdown()
+update_display()
+
+app.mainloop()
